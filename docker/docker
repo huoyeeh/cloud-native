@@ -1,0 +1,142 @@
+docker:
+1. docker  什么是容器？
+    docker --> 贡献出来 containerd  
+        https://docker.com
+
+    理念：三大理念
+        Build -> Share -> Run
+    Image:  怎么迁，打镜像。
+        代码 + 配置 = image -> share --> run
+        image harbor比较大不止十几个g 可能几十个T
+        images --》 harbor <---- nodes   ---》apiserver <-- 运维。
+
+    演示案例 docker run nginx | docker run -it -p 8888:80 nginx
+
+    LXC，运行的技术太高。
+    docker 2013 只解决一些问题，而一些监控，编排，运维。没办法，由谷歌，brog。15年。
+    dockercompose。单机编排。
+    Racher
+
+    Cgroup ，内核，Linux 1991 linus
+
+    CNCF　－－project  毕业和未毕业。第一个毕业的是k8s。
+
+docker的组成：
+    docker主机（host）：物理机或虚拟机。
+    docker 服务端 server： docker守护进程，运行docker容器。
+    docker 客户端client： 客户端使用docker命令工具
+    docker 仓库register：保存镜像的仓库，类似于git或svn
+    docker 镜像images：镜像可以理解为创建实例使用的模板
+    docker 容器container：容器从镜像生产对外提供服务的一个或一组服务。
+    官方仓库：https://hub.docker.com
+
+
+docker对比虚拟机
+    资源利用率更高， 少了一个hypervious，
+    开销更小：不需要启动单独的虚拟机占用硬件资源。
+    启动速度更快。在数秒内完成启动。
+
+
+引申的技术问题？
+    1、怎么样保证每个容器都有不同的文件系统并且能互不影响？
+        cgroup namespace
+    2、一个docker主进程内的各个容器都是其子进程，那么实现同一个主进程下不同类型的子进程？
+    各个进程间通信能相互访问（内存数据）吗？
+
+    3、每个容器怎么解决IP及端口分配的问题？
+
+    4、多个容器的主机名能一样吗》
+
+    5、每个容器都要不要有root用户？ 怎么解决账户重名问题？
+
+    容器其实里面没有内核。
+    root@hy-docker:~# docker exec -it a87cd468c548 bash
+
+            root@a87cd468c548:/# cat /etc/issue
+        Debian GNU/Linux 12 \n \l
+
+        root@a87cd468c548:/# uname -a
+        Linux a87cd468c548 5.15.0-76-generic #83-Ubuntu SMP Thu Jun 15 19:16:32 UTC 2023 x86_64 GNU/Linux
+        root@a87cd468c548:/# ls /boot/
+        root@a87cd468c548:/# 
+
+namespace 技术：
+    是Linux中底层概念。在内核层实现，不同类型的命名空间被部署在核内，各个docker容器运行在同一个docker主进程并且共用同一个宿主机系统内核，个docker容器运行在宿主机的用户空间，每个容器都要有类似于虚拟机一样的相互隔离的运行空间，但是容器技术是在一个进程内实现运行指定的运行环境，并且还可以保护宿主机内核不受其他进程的干扰核影响，如文件系统空间、网络空间、进程空间等。
+
+    在/proc/pid/ns/
+    在宿主机中直接隔离。
+
+    由内核来维护
+    root@hy-docker:~# iptables -t nat -vnL
+    
+        Chain DOCKER (2 references)
+        pkts bytes target     prot opt in     out     source               destination         
+            0     0 RETURN     all  --  docker0 *       0.0.0.0/0            0.0.0.0/0           
+        28  1560 DNAT       tcp  --  !docker0 *       0.0.0.0/0            0.0.0.0/0            tcp dpt:8888 to:172.17.0.2:80
+
+    docker pull cetos:7.9.2009
+    docker run -it --rm centos:7.9.2009 bash     --rm 单次运行，运行完及删除。
+
+    宿主机中的namespace，隔离的类型，
+    MNT，IPC，UTS，PID，Net，User。
+
+    Net Namespace
+        每一个容器都有类似于虚拟机一样有自己的网卡、监听端口、TCP/IP协议等，docker使用network namespace启动一个vethX接口，这样你的容器将拥有它自己的桥接IP地址，通常是docker0，而docker0就是Linux的虚拟网桥，网桥在数据链路层的网络设备，通过mac地址对网络进行划分，并且在不同网络直接传递数据。
+
+        网络：apt install brige_utils
+
+Cgroup：资源限制。
+    宿主机对容器进行资源分配限制，比如CPU、内存等。
+    作用： 限制一个进程组能够使用的资源上限，包括CPU、内存，网络，
+    Linux control groups
+    Cgroups 在内核层默认已经开启，从centos核Ubuntu对比结果来看，显然Ubuntu指定的功能更多。
+    cat /boot/config-5.15.0-76-generic | grep CGROUP | grep -v '^#' |wc -l
+
+    内存
+    cat /boot/config-5.15.0-76-generic  | grep MEM |grep CG
+    cgroup具体实现
+    blkio：块设备iO
+    cpu：使用调度程序为cgroup任务提供cpu的访问。
+    ns：命令空间子系统。
+
+
+容器技术的分类
+    chroot namespace cgroups具备了基础的容器运行环境。还需要相应的容器创建用户删除的管理工具。
+    早期 LXC，目前主要使用docker ，docker 开源出来的containerd
+    核心技术： runtime runc。 
+    docker 也是containerd，docker就是引擎。本地调用。 docker.service
+    ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock
+
+容器的优缺点：
+    快速部署，高效虚拟化，节省开支，简化配置，快速迁移核扩展。
+
+    缺点： 隔离性，安全性。容器没有做用户的限制。
+    普通用户被拒绝 访问docker 。
+
+docker（容器）的核心技术：
+    open container interface （OCI） 发布了runtime和image format spec等规范。
+    可保证移植和相互可操作性。
+
+    runtime定义的规范，哪里看。
+        cat /run/docker/runtime-runc/moby/a87cd468c548e76eca8f00b638f59771894c064b91dc47eec78dfd8a2303805a/state.json 
+
+    容器生命周期：容器进程开源被外部程序关停，runtime规格定义了对容器操作信号的捕获，并做相应资源回收的处理，避免僵尸进程的出现。
+
+
+容器镜像（image format spec）
+    容器镜像主要包含以下内容：
+
+        文件系统，manifest，config文件，index文件，父镜像，
+        参数：
+            iD，tag标签，仓库，os ，architecture author ，create
+
+
+docker 依赖的技术：
+    容器网络，docker自带的网络docker network 仅支持单机上。第三方插件，calico，flannel。
+    服务发现：
+    容器监控：docke ps /top /stats 容器运行状态。
+    数据管理
+    日志收集： docker logs ，ELK。EFK
+    CI/CD  
+        Jenkins+Gitlab。
+    
