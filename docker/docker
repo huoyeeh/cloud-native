@@ -140,3 +140,114 @@ docker 依赖的技术：
     CI/CD  
         Jenkins+Gitlab。
     
+
+
+============== docker ============================
+
+1\dockerde的安装。
+    docker ce镜像，aliyun
+        apt-cache madison docker-ce
+        cr.console.aliyun.com #镜像加速
+    文件硬件优化：
+                ulimit -n 1048576 
+    内核参数优化：
+        net.ipv4.ip_forward=1
+        网桥
+        net.bridge.bridge-nf-call-ip6tables=1
+        net.bridge.bridge-nf-call-iptables=1
+
+    将docker的存储至磁盘
+    cat /etc/docker/daemon.json
+        {
+            "registry-mirrors": ["https://n46bpyro.mirror.aliyuncs.com"],
+            "docker-root": "/data/docker"   #挂载磁盘的目录
+        }
+           
+    之前是 cgroupfs
+    Cgroup Driver: systemd
+
+        docker info 详解
+        root@hy-docker:~# docker info
+            Client: Docker Engine - Community
+            Version:    24.0.5
+            Context:    default
+            Debug Mode: false   #客户端的信息
+            Plugins:
+            buildx: Docker Buildx (Docker Inc.)
+                Version:  v0.11.2
+                Path:     /usr/libexec/docker/cli-plugins/docker-buildx
+            compose: Docker Compose (Docker Inc.)
+                Version:  v2.20.2
+                Path:     /usr/libexec/docker/cli-plugins/docker-compose
+
+            Server:
+            Containers: 3
+            Running: 1
+            Paused: 0
+            Stopped: 2
+            Images: 2
+            Server Version: 24.0.5
+            Storage Driver: overlay2        #存储引擎类型
+            Backing Filesystem: extfs       #后端文件存储，系统盘，数据盘
+            Supports d_type: true           #分层，是否支持
+            Using metacopy: false   
+            Native Overlay Diff: true       #云原生分层
+            userxattr: false
+            Logging Driver: json-file       #日志驱动，json
+            Cgroup Driver: systemd          #限制资源利用率
+            Cgroup Version: 2
+            Plugins:
+            Volume: local                       #插件
+            Network: bridge host ipvlan macvlan null overlay        #网络类型
+            Log: awslogs fluentd gcplogs gelf journald json-file local logentries splunk syslog  #日志类型
+            Swarm: inactive                                         #docker早期的管理
+            Runtimes: io.containerd.runc.v2 runc                    #
+            Default Runtime: runc
+            Init Binary: docker-init                                #docker初始化
+            containerd version: 8165feabfdfe38c65b599c4993d227328c231fca
+            runc version: v1.1.8-0-g82f18fe
+            init version: de40ad0
+            Security Options:                                       #docker的安全
+            apparmor
+            seccomp
+            Profile: builtin
+            cgroupns
+            Kernel Version: 5.15.0-76-generic
+            Operating System: Ubuntu 22.04.2 LTS
+            OSType: linux
+            Architecture: x86_64
+            CPUs: 2
+            Total Memory: 3.513GiB
+            Name: hy-docker
+            ID: ea36ac28-bf1f-4723-ab72-00134b91627e
+            Docker Root Dir: /var/lib/docker                    #数据目录
+            Debug Mode: false
+            Experimental: false
+            Insecure Registries:                                #自己搭的数据仓库
+            127.0.0.0/8
+            Registry Mirrors:
+            https://n46bpyro.mirror.aliyuncs.com/
+            Live Restore Enabled: false                         #容器存活
+
+
+
+====================== docker的使用 =========================================、
+    /run/docker #运行时的文件，不能持久化
+    /var/lib/docker/image/overlay2/layerdb/sha256   #镜像分层 分目录存储。 如果有多个相同，只会存一个。
+
+    "storage-driver": "overlay2"
+
+    Docker存储引擎：
+
+    docker 命令： docker --help
+
+        搜索，下载，查看，导出，导入，删除
+
+
+        hub.docker.com:80/ehuo/nginx:v1  
+
+        docker save 
+        docker save openjdk:18-oracle > opejdk-18-oracle.tar.gz  | docker save iamgs -o open.tar.gz
+        docker load -i packages | docker load < 
+        docker rmi imagesID
+        
