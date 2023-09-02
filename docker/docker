@@ -17,7 +17,7 @@ docker:
     dockercompose。单机编排。
     Racher
 
-    Cgroup ，内核，Linux 1991 linus
+    Cgroup ，内核，Linux 1991 linux
 
     CNCF　－－project  毕业和未毕业。第一个毕业的是k8s。
 
@@ -251,3 +251,283 @@ docker 依赖的技术：
         docker load -i packages | docker load < 
         docker rmi imagesID
         
+        #将一个正在运行的容器，提交成为一个镜像。
+            docker commit -a "ehuo www.github/huoyeeh.com"  -m "v1" imageID  harbor.ehuo.com/linux/apps1:v1
+        
+        #cp 拷贝文件 宿主机-- 容器
+
+            docker exec -it  imagesID bash                             #进入容器的一种方式， -i 从当前输入，-t 当前终端。
+
+            diff #容器里面查看里面的变化。
+            events #事件
+
+            docker history images  #镜像的构建历史
+
+            docker inspect imagesID  #
+
+            docker logs -f image ID
+
+            docker port  iamgeID   | 当前的容器的映射端口。
+
+            root@hy-docker:~# docker ps -a -q
+                c4b109bb63ed
+                f15798cee802
+                a87cd468c548
+
+            docker ps -aq -f status=exited   #指定退出的容器。
+
+            #只删除哪些退出的容器
+                docker rm -fv `docker ps -qa -f status=exited`
+
+            
+            #启动一个容器
+                docker run -i -t  --name container1 -p 90:80 cetos:7.9.2009 pwd --rm   | --rm 只运行一次。
+
+            #docker stats
+                docker 的状态。
+            
+
+            #images的配置
+                docker update imagesID --cpu 1 --memory 
+
+
+========================   docker-ce docker-compose harbor ==============
+        apt-get update
+        apt-get -y install apt-transport-https ca-certificates curl software-properties-common
+        curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | sudo apt-key add -
+        add-apt-repository "deb [arch=amd64] https://mirrors.aliyun.com/docker-ce/linux/ubuntu $(lsb_release -cs) stable"
+        apt-get -y update
+        apt-get -y install docker-ce
+        安装指定版本的Docker-CE:
+        Step 1: 查找Docker-CE的版本:
+        apt-cache madison docker-ce
+        apt-get -y install docker-ce=[VERSION]
+
+        #docker-compose
+        Ubuntu: 
+    # apt update
+    # apt install -y python-pip
+
+    #基于python3按照docker-compose
+
+    #华为有包，直接安装。
+    
+
+
+  ================   harbor镜像仓库  =====================
+    
+        蜻蜓client   --->  蜻蜓server
+
+        新建项目：  
+            访问级别：是否公开。
+
+        连接访问：
+            docker.service
+            --insecure-registry IP 
+
+        上传：
+            docker tag images:tag IP/project
+
+        服务的高可用，数据的高可用。
+        
+
+        --with-notary #安全，
+        --with-trivy #扫描漏洞，一般都是包版本不新
+        1.9版本垃圾清理是同步，不能同时上传和下载。 需要升级解决，出现bug。
+
+        瓶颈：网络IO，带宽。 10G。
+
+            磁盘IO、空间：
+                SSD
+        
+        基于负载均衡的haproxy实现高可用。
+        
+
+=================  dockerfile构建镜像  ================
+1、镜像简介：
+    1.docker镜像基于union file system 将多个目录合并挂载在一个目录给容器使用。
+        hash计算，同一个值，一个layer。
+    2.最底层是bootfs，镜像没有内核使用的是宿主机的bootfs。
+        内核既有驱动，镜像没有内核，没有bootfs，有rootfs，有文件系统。，会有一个基础镜像，Ubuntu，centos，
+        有一个可写层，新产生的数据进入。 copy on write ，
+    3.一个镜像是由一层或者多层合并而成，每一层称为是一个layer。
+
+    4.镜像可以基于其他镜像进行重新构建，被引用的镜像称为父镜像。
+
+    5.一个镜像可以同时被创建为多个容器
+    
+    6.镜像是只读的，任何的更改都不会直接修改镜像。
+
+
+2、dockerfile与镜像的关系
+    dockerfile ——》 image --》 container
+
+3、dockerfile 一般放入到gitlab
+
+4、dockerfile指令：
+    FROM cetos：7.6.2009  #FROM指令当前镜像的用于指定父镜像。
+    
+    ADD[--chown=<user>:<group>]<src> ...<dest> 
+    #用于添加宿主机本地的文件、目录、压缩等资源到镜像里面去，会自动解决tar.gz格式的压缩包，但不会自动解压zip包。
+
+    MAINTAINER #（镜像的维护者信息，目前已经不推荐使用）
+    LABEL “KEY”=“VALUE” #设置镜像的属性标签。
+
+    COPY COPY[--chown=<user>:<group>] <src>...<dest>
+    #用于添加宿主机本地的文件，目录、压缩等资源到镜像里面去。不会解压任何压缩包。
+
+    ENV MY_NAME="PATH" #设置容器环境变量
+    USER <user>[:<group>] or USER <UID>[:<GID>]
+
+    RUN yum install vim zip && cd /etc/nginx  #执行shell命令，但是一定要以费交互式的方式执行
+    VOLUME VOLUME ["/data/data1",]/data/data2 #定义volume   创建目录
+    WORKDIR /data/data1 #定义工作目录
+
+    EXPOSE <port> [<port>/<protocol>...]
+    #声明要把容器的端口映射到宿主机
+
+    CMD ["executable","param1","param2"] (exec from ,this is the preferred from) #推荐的可执行程序方式
+    CMD ["param1","param2"](as default parameter to ENTRYPOINT) #ENTERPOINT 默认参数
+    CMD command param1 param2 (shell form) #基于shell命令的
+    #CMD 以上三种方式定义镜像启动为一个容器时所执行的默认命令或脚本。
+
+
+
+    nginx -V 看参数。
+
+
+    容器里面的日志怎么输出？
+        1.软连接
+            ln -sv /dev/stdout   *access.log
+            ln -sv /dev/stderr   *error.log
+
+        2.集中收集日志
+            由外部的来收集日志。
+
+
+5、CMD与entrypoint
+    CMD #镜像启动为一个容器时候的默认命令或脚本，CMD["/bin/bash"]
+    ENTERPOINT #也可以用于定义容器在启动时默认执行的命令或者脚本，如果是CMD命令混合使用的时候，将CMD的命令当作参数传递给ENTERPOINT后面的脚本，可以在脚本中对参数做判断并相应的容器初始化操作。
+        ENTERPOINT["top","-b"] == ENTERPOINT["top","-b","-c"]
+        CMD["-c"]
+    
+    ENTERPOINT ["docker-enterpoint.sh"] #定义一个入口脚本，并传递MySQLd参数
+    CMD ["mysqld"]
+ 
+    ENTERPOINT ["docker-enterpoint.sh","mysqld"]
+
+    
+
+
+6、思考
+    1，宿主机中的PID和容器中PID有什么关系？
+        容器中必有一个进程为1的。
+    
+    2.容器为什么要自定义守护进程？可以不可以没有？
+        pid 为1 ， docker 创建一开始只是创建namespace，运行环境，只是空的，如果没有程序运行，就会退出。
+        容器的前台一直去执行，  如果没有这个程序，容器就会起不来。
+
+
+ES 最大4-6c 13g  数据库 4-6c 10g   redis 8g  nginx 1.5-2g   java 0.5-1.5c 2-4g  
+
+7、资源限制
+    1.k8s的资源限制通过容器中来限制，调用宿主机的cgroup 来给cpu和内存限制。
+        最小限制单位pod  容器， namespace。
+        --cpus  -m 
+        K8SR容器可以只用的最大的资源：
+            保证容器可以使用的最小资源， 
+                cpu request =100m  memory request =256Mi
+            k8s 动态调整的资源。
+                cpu request =500m  memory request =1024Mi
+
+        多个pod的资源限制：
+            used request limits total capacity
+
+    压测工具：stress-ng
+        docker pull lorel/docker-stress-ng
+        
+        docker run -it --rm lorel/docker-stress-ng
+
+        docker run -it --rm lorel/docker-stress-ng --cpu 4 --vm 2 --hdd 1 --fork 8 --switch 4 --timeout 15s --l
+            --vm #一个work进程，256m
+            多核的cpu，会随机分配，看cpu的空闲度。
+        
+        docker run --cpu 1 it --rm lorel/docker-stress-ng --cpu 3
+
+        /sys/fs/cgroup/cpu    10000m
+
+        内存：
+            docker stats  
+
+==============  docker 数据卷 =======================
+
+如果正在运行中的容器生成了新的数据或修改了现有的一个已经存在的文件内容，那么新产生的数据将会被复制到读写层进行持久化保存，
+这个读写层也就是容器的工作目录，此即“写时复制COW copy on write 机制”，
+
+/overlay2/7cc8ddbac7bf8b87e373bf867783f84148adca8b31f41f5844376bbf6c09e7ef/merged/opt/nginx.log   #可写成
+./overlay2/7cc8ddbac7bf8b87e373bf867783f84148adca8b31f41f5844376bbf6c09e7ef/diff/opt/nginx.log    #挂载层
+
+2、Docker数据卷 
+    保证数据的一致性，和持久化。
+    -v
+3、kubnernetes 数据持久化：
+    CSI：专门对接 storage
+    CSI --> StorageClass --> PV ---> PVC --> Volume --> Pod --> Cotainer Filesystem
+
+
+4、docker 的存储信息
+    docker inspec iamgeID 
+        Lower Dir: image镜像层（镜像本身，只读）
+        Upper Dir: 容器的上层（读写）
+        Merged Dir: 容器的文件系统，使用Union FS（联合文件系统） 将lowerdir和upper Dir：合并和容器使用；
+        Work Dir：容器在宿主机的工作目录。
+
+
+
+    删除容器 docker rm -fv imageID
+
+5|docker Volume
+    /var/lib/docker/volumes/
+    docker 的卷 ，可以创建，到时候挂载指定卷名。
+
+    继承父卷， A ： B--》A  C -->A;
+
+    docker run -it -d --name volume-server -v /data/testapp:/usr/local/tomcat/webapps/testapp -v 1:1 tomcat:8.5.73
+    docker run -d --name web1 -p 8080:8080 --volumes-from volume-server tomcat:8.5.73
+
+
+
+================ docker network ======================
+
+五种网络
+默认的bridge
+
+docker run -ir --net=bridge centos:7.9.2009
+
+net-tools
+docker网络 Container模式：
+    -net=conainer 指定一个存在的容器共享同一个网络。
+
+    docker run -it -d -name php-server -net=conainer:nginx-webq php:7.3.33-fpm
+    
+    cat /etc/sysctl.conf    sysctl -p   内核参数优化：
+    sysctl -a 
+    net.ipv4.ip_forward = 1
+
+
+=============== docker compose =====================
+Huawei@123
+
+
+
+
+
+
+
+
+
+
+
+
+
+
