@@ -1,0 +1,76 @@
+
+
+=========  环境与开发 ==========
+
+go  Outline Map
+
+必装：gopls，dlv 。
+
+windows: 设置，系统，高级系统设置，环境变量。 Path，
+GOPATH：用户相关的 , Path, goroot:安装目录，
+mirrors.huaweicloud.com  语言类： go 
+export GOPROXY=https://repo.hjuaweiclould.com/
+export GO111MODULE=on
+export GOPROXY=https://repo.huaweicloud.com/repository/goproxy/,direct
+export GONOSUMDB=*
+
+export PATH=$PATH:/usr/local/go/bin
+export GOPROXY=https://repo.huaweicloud.com/repository/goproxy/
+
+
+
+==========   冯诺依曼  ==========
+    CPU运算
+        数据在I里，从I读取到内存以供CPU使用，CPU从内存加载指令和数据，计算结果写回内存。
+        如有必要，写道O设备上。
+        CPU是干活的，按照指令干活，我们写的GO转为二进制指令。
+    
+
+
+1、动态语言：
+    不需要指定变量类型，有类型，变量可以随意指定合法类型。
+
+    JS/Python
+
+  静态语言：
+    var a int = 100
+    a = 200
+    a = "abd" 错误的
+    编译时，发现问题。 
+  
+  强类型语言：
+    强弱相对概念
+    go语言不支持隐式类型转换， “abc” + 1  类型强制转换。
+
+
+     go语言式强类型、静态。
+
+
+
+
+go install -v github.com/go-delve/cmd/dlv@latest
+go install -v golang.org/x/tools/gopls@latest
+go install -v honnef.co/go/tools/cmd/staticcheck@latest
+
+
+outline map  postfix 
+
+go 命令
+  go install 命令：下载第三方包到$GOPATH/go/下面的缓存包文件们到该目录，编译好可执行文件放到$GOPATH/go/bin
+  go get命令：下载第三方包到$GOPATH /go/下面缓存包文件们到该目录，以后编程用这些包，如果开启了go modules ，包依赖记录在go.mod中
+    go get -u 包
+  go mod 命令： 开启go modules，启用模块化（包管理），标志go.mod文件
+    go mod init 名字
+    go mod tidy 扫描当前项目，从go.mod文件中把不依赖的第三方包移除，也可以把依赖的第三方包加进来、
+  go version 打印版本
+  go env 打印go环境的环境变量
+  go build 编译
+  go run 会直接进行go build
+
+  
+
+
+
+
+
+

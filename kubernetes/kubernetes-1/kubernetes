@@ -37,8 +37,18 @@ kubernetesr入门
 
     api - server 访问的入口。验证 ，鉴权，授权。
 
+
+
+
 2、kube-scheduler
     调度器，接收容器的调度请求，并返回请求。
+    通过调度算法为待调度的pod列表对的每个Pod从可用Node列表中选择一个最合适的Node，并将信息写入etcd中。
+    node节点上的kubelet通过API server监听到kubernetes scheduler 产生的Pod绑定信息，然后获取对应的Pod清单，下载image，并启动容器。
+
+    策略：z
+        1，先排除不符合条件的节点。2，在从剩余的可用选出一个最符合条件的节点。
+
+
 
 3、etcd 
     存储k8s里面的对象资源数据，保存一些事件。由api-server 写入事件。
@@ -50,10 +60,14 @@ kubernetesr入门
 
 5、kubelet 
      接收并执行Master发来的指令，管理由Scheduler绑定至当前节点上的Pod对象的容器
-        
+    运行在每个node节点的带了组件，踏监视每个
+
 
 6、kube-proxy
     运行于每个Worker节点上，专用于负责将Service资源的定义转为节点本地的实现
+
+
+7、DNS
 
 
     2、架构部署的高可用
@@ -67,3 +81,613 @@ master 2c4g   etcd 2c2g  haproxy 1c1g node 4c4g
 
 
 2、安装k8s
+
+1、集群维护
+    添加与删除master 和node
+    升级master 和 node
+    master高可用机制与验证
+
+2、kubectl 常用命令及k8s 组件-etcd
+etcd 简介与命令
+etcd 数据备份与恢复
+
+3、DNS 与dashboard
+    codedns
+    官方dashboard
+    三方dashboard
+4、yaml 文件基础
+    基于yaml文件运行nginx 及tomcat
+
+5、k8s资源对象简介
+    pod replication controller replicatSet deployment
+
+6、svc volume 简介 、emptyDIr hostaPath
+
+7、nfs共享存储 Cofigmap pv/pvc statefulset damonset
+
+
+
+
+
+
+
+
+=============   etcd  ==============
+/flannel 
+/calico
+/namespace
+
+    etcd 简介与命令
+        etcd是一个高度一致的分布式键值存储，它提供了一种可靠的方式来存储需要由分布式系统或机器集群访问的数据。
+        它可以在网络分区期间优雅地处理领导者选举，并且可以容忍机器故障，即使是在领导节点中也是如此。
+
+        simple interface
+        k-v storge
+        watch for change
+    etcd的属性
+        复制集群、镜像集群
+            zookeeper、etcd、mysql主从
+        分布式集群（数据分片-hash）
+            redis cluster、kafka、elasticsearch
+        1、完全复制：集群中的每个节点都可以使用完整的存档
+        2、高可用性： etcd避免单点故障
+        3、一致性：
+
+    etcd：
+        消耗磁盘IO，内存，
+
+    etcd命令使用：
+        以路径的方式显示所有的值：
+        etcdctl get / --prefix --keys-only 
+    
+    etcd数据watch机制：
+        基于不断监看数据，发送变化就主动触发通知客户端。
+
+
+    etcd 数据备份与恢复
+        V3 APi版本数据备份与恢复；
+        WAL是write ahead log的缩写，也就是在执行真正的写操作之前先写一个日志，预写日志。
+
+        etcdctl snapshot save snapshot.db
+
+        etcdctl snapshot restore snapshot.db --data-dir=/opt/etcd-testdir #将恢复到一个新的不存在的目录
+
+        自动备份：
+
+
+============== 集群维护 ============
+1. 集群维护
+    添加和删除master
+    二进制： add-master  <cluster>  <ip>      to add a master node to the k8s cluster
+            ./ezctl add-master k8s-cluster1 <ip>
+    
+    过保：服务器坏了：
+        删除节点：先做pod驱逐，从k8s删除节点。
+        del-master  <cluster>  <ip>      to delete a master node from the k8s cluster
+        del-node 
+            ./ezctl del-node k8s-cluster1 <ip>
+        手动驱逐：
+            kubectl drain <ip>  --ignore-damonset --delete-emptydir-data   #damonset是不会被重建的
+            kubectl delete node <ip>
+            在二进制里面host需要删掉/etc/kubeasz/clusters/k8s-cluster1/hosts
+
+    添加与删除node
+    二级制： add-node   <cluster> <ip>
+            ./ezctl add-node k8s-cluster1 <ip>
+    
+    升级master
+        kube-apiserver kube-contrller-manager kubectl kubelet kube-proxy kube-scheduler
+    
+    升级node
+        kubectl kube-proxy kubelet 
+
+============== yaml文件基础 ================
+
+基于yaml文件，在k8s中实现pod的创建与删除等功能；
+
+    create          Create a resource from a file or from stdin
+    kubectl explain namespace #查看资源对象的信息
+
+    kubectl create namespace ehuo   #命令行创建
+
+    vim namespace.yaml
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+          name: ehuo
+    
+    yaml和json对比；
+        特点：
+            不能注释，可读性差，语法严格，适用于api返回值，也可用于配置文件。
+
+        yaml特点：
+            大小写敏感，缩进时不允许使用tab，只能用空格，需要相同层级的元素左侧对齐即可。
+        
+            # cat nginx.yaml 
+            kind: Deployment  #类型，是deployment控制器，kubectl explain  Deployment
+            apiVersion: extensions/v1beta1  #API版本，# kubectl explain  Deployment.apiVersion
+            metadata: #pod的元数据信息，kubectl explain  Deployment.metadata
+            labels: #自定义pod的标签，# kubectl explain  Deployment.metadata.labels
+                app: linux36-nginx-deployment-label #标签名称为app值为linux36-nginx-deployment-label，后面会用到此标签 
+            name: linux36-nginx-deployment #pod的名称
+            namespace: linux36 #pod的namespace，默认是defaule
+            spec: #定义deployment中容器的详细信息，kubectl explain  Deployment.spec
+            replicas: 1 #创建出的pod的副本数，即多少个pod，默认值为1
+            selector: #定义标签选择器
+                matchLabels: #定义匹配的标签，必须要设置
+                app: linux36-nginx-selector #匹配的目标标签，
+            template: #定义模板，必须定义，模板是起到描述要创建的pod的作用
+                metadata: #定义模板元数据
+                labels: #定义模板label，Deployment.spec.template.metadata.labels
+                    app: linux36-nginx-selector #定义标签，等于Deployment.spec.selector.matchLabels
+                spec: #定义pod信息
+                containers:#定义pod中容器列表，可以多个至少一个，pod不能动态增减容器
+                - name: linux36-nginx-container #容器名称
+                    image: harbor.magedu.net/linux36/nginx-web1:v1 #镜像地址
+                    #command: ["/apps/tomcat/bin/run_tomcat.sh"] #容器启动执行的命令或脚本
+                    #imagePullPolicy: IfNotPresent
+                    imagePullPolicy: Always #拉取镜像策略
+                    ports: #定义容器端口列表
+                    - containerPort: 80 #定义一个端口
+                    protocol: TCP #端口协议
+                    name: http #端口名称
+                    - containerPort: 443 #定义一个端口
+                    protocol: TCP #端口协议
+                    name: https #端口名称
+                    env: #配置环境变量
+                    - name: "password" #变量名称。必须要用引号引起来
+                    value: "123456" #当前变量的值
+                    - name: "age" #另一个变量名称
+                    value: "18" #另一个变量的值
+                    resources: #对资源的请求设置和限制设置
+                    limits: #资源限制设置，上限
+                        cpu: 500m  #cpu的限制，单位为core数，可以写0.5或者500m等CPU压缩值
+                        memory: 2Gi #内存限制，单位可以为Mib/Gib，将用于docker run --memory参数
+                    requests: #资源请求的设置
+                        cpu: 200m #cpu请求数，容器启动的初始可用数量,可以写0.5或者500m等CPU压缩值
+                        memory: 512Mi #内存请求大小，容器启动的初始可用数量，用于调度pod时候使用       
+            nginx：1c1g
+            java：1c 2g/1c 3g
+            es/mysql/kafka： 2c4g
+
+                ---
+                kind: Service #类型为service
+                apiVersion: v1 #service API版本， service.apiVersion
+                metadata: #定义service元数据，service.metadata
+                labels: #自定义标签，service.metadata.labels
+                    app: linux36-nginx #定义service标签的内容
+                name: linux36-nginx-spec #定义service的名称，此名称会被DNS解析
+                namespace: linux36 #该service隶属于的namespaces名称，即把service创建到哪个namespace里面
+                spec: #定义service的详细信息，service.spec
+                type: NodePort #service的类型，定义服务的访问方式，默认为ClusterIP， service.spec.type
+                ports: #定义访问端口， service.spec.ports
+                - name: http #定义一个端口名称
+                    port: 80 #service 80端口
+                    protocol: TCP #协议类型
+                    targetPort: 80 #目标pod的端口
+                    nodePort: 30001 #node节点暴露的端口
+                - name: https #SSL 端口
+                    port: 443 #service 443端口
+                    protocol: TCP #端口协议
+                    targetPort: 443 #目标pod端口
+                    nodePort: 30043 #node节点暴露的SSL端口
+                selector: #service的标签选择器，定义要访问的目标pod
+                    app: linux36-nginx #将流量路到选择的pod上，须等于Deployment.spec.selector.matchLabels
+        
+
+=========== k8s资源对象 ============
+1.资源管理核心概念
+设计理念：接口层（客户端库和使实用工具），管理层（自动化和策略管理），应用层（部署和路由），核心层（API和执行环境），  | CRI CNI CSI 镜像仓库。
+
+    APi设计原则
+        1.所有API应该是声明式的。  kubectl api-resources  
+            声明式：指定一些关键的因素，不用关心其它因素，在哪启动。
+        2.API对象是彼此互补而且可组合的。
+        3.高层API以操作意图为基础设计
+        4.底层API根据高层API的控制需要设计
+        5.尽量避免让操作机制依赖于全局状态，因为在分布式系统中要保证全局状态的同步是非常困难的（etcd）
+
+    1.1 API对象
+        how？
+            kubectl api sdk UI  --> apiserver(master)
+        what?
+            资源对象：pod、RS、RC、DP、Statefulset daemonset
+                    job、cornjob hpa node namespace service ingress label ca
+            存储对象：volume PV PVC secret configmap
+            策略对象：securitycontext resourceQuote limitrange
+            身份对象：serviceaccount role clusterrole
+
+2.命令的使用
+    基础命令：增删改查
+        create/delete/edit/get/describe/logs/exec/scale/
+        explain：命令说明
+
+    配置命令：便签管理，动态配置
+        label-标签管理实现亲pod和node亲和性，apply-动态配置
+    集群管理命令：  
+        集群状态：cluster-info/top   （kubectl top node）
+        node节点管理：
+            cordon：警戒线
+            uncordon：取消警戒线
+            drain：驱逐node上的pod，用于node下线
+            taint：给node标记污点，实现反亲pod与node反亲和性。
+            api资源：api-resources/api-versions/version
+            客户端kube-config配置：config
+
+
+3.k8s的牛鼻子--- API
+    3.1重要概念  
+        对象 ---  k8s声明式API
+        yaml文件   调用声明式APi
+        必需字段
+            apiversion --创建该对象所使用的k8s api的版本
+            kind  --  创建对象的类型
+            metadata -- 帮助识别对象唯一性的数据，包括一个name名称、可选的namespace
+            spec 声明的期望状态
+            status （pod创建完成后k8s自动生成status）
+
+    Pod 
+    1. pod是k8s中的最小单元
+    2.一个pod可以运行一个容器，也可以运行多个容器
+    3.运行多个容器的话，这些容器时一起被调度的
+    4.Pod的生命周期是短暂的，不会自愈，是用完就销毁的是实体
+    5.一般我们是通过contaoller来创建和管理pod的。
+
+        pod的生命周期：
+            初始化容器，启动前操作，就绪探针，存活弹指，删除pod操作
+
+        探针：
+            livenessProbe: 存活探针
+                检测应用发送故障时使用，不能提供服务、超时等检测失败重启pod
+            readinessProbe： 就绪探针
+                检测pod启动之后应用是否就绪，是否可以提供服务检测成功，pod开始接收流量。
+
+            
+4.控制器
+    Rc Rs和Deployment
+    replication controller: 副本控制器
+
+    replicaSet
+    
+    Deployment
+
+
+5.Service
+    网络：Pod service Node 
+    why？ pod重建之后IP就变了，pod之间直接访问会有问题
+    what？ 解耦了服务和应用
+    How？ 生命一个service对象
+    一般常用的有两种：
+        k8s集群内的service： selector指定pod，自动创建endpoint
+        k8s集群外的service：手动创建endpointｓ，指定外部服务的IP，端口和协议
+
+
+    externalname LB clusterIP nodeport  
+
+    kube-proxy和service的关系：
+    kube-proxy  ---watch ---> k8s-apiserver
+    kube
+
+
+
+    两个不相干的服务，通过注册中心来访问。
+    注册中的高可用。
+
+6.volume  
+    why：数据和镜像解耦，以及容器间的数据共享
+    what： k8s抽象出的一个对象，用来保存数据，做存储用
+    常用的卷：
+        emptyDir 本地临时卷
+        hostPath： 本地卷 
+        NFS/NAS/Ceph等： 共享卷
+        configmap： 配置文件
+    
+    emptyDir：
+        当Pod被分配给节点时，首先创建emptyDir卷，并且只要改pod在节点上运行，该卷就会存在。
+        如果节点上该pod被删除时，这时候emptydir卷就会被永久删除。
+    
+        一般作为日志收集：
+            如 nginx --》 emptyDir 《-- 日志收集
+    
+    hostPath： 
+        卷将主机节点的文件系统中的文件或目录挂载到集群中，pod删除的时候，卷不会被删除
+        volumes:
+        - name: cache-volume
+          hostPath:
+            path: /tmp/ehuo
+    
+    NFS等共享存储：
+        nfs卷允许将现有的NFS（网络文件系统）共享挂载到您的容器中，不行emptyDir，当删除Pod时，
+        nfs卷的内容被保留，卷仅仅时被卸载，这意味着NFS卷可以预填充数据，并且可以在pod之间“切换”数据。
+        NFS可以被多个写入者同时挂载。
+        volumes:
+        - name: my-nfs-volume
+          nfs:
+            server: ip
+            path: /data/k8sdata
+    
+    configmap：
+        why： 配置信息和镜像解耦
+        what：将配置信息放到configmap对象中，然后再pod的对象中导入configmap对象，实现导入配置的操作
+        how： 声明一个configmap的对象，作为volume挂载到pod中。
+        一个实验：通过LB--》nodeport -》service—》pod
+    
+7.PV/PVC
+    WHY:   实现pod和storage的解耦，这样我们修改storage的时候不需要修改pod，也可以实现存储和应用权限的隔离；
+    what： pv和pvc
+
+    PVC是用户存储的请求，他与pod相似，Pod消耗节点资源，PVC消耗PV资源。
+    pod可以请求特地级别的资源（CPU和内存），声明可以请求特定的大小和访问模式（如，可以以读/写一次或只读多次模式挂载）
+
+8.statefulset 
+    why：为了解决有状态服务的问题
+    what： 他所关联的Pod拥有固定的pod名称，主机名，启停顺序；
+    how：创建一个statefulset类型的pod，并指定servicename，创建headless的类型的svc
+
+
+9.daemonset
+    确保全部节点上运行一个pod脚本。
+
+======== pod的状态和探针 ==========
+1. pod状态：
+    pending  running succeeded 和 failed
+    kubectl describe pod name  #查看错误信息
+    第一阶段：
+
+    第二阶段：
+        unshedulable:不能被调度；
+        podscheduled
+        initialized
+        imagepullbackoff
+        running
+        ready
+
+2.探针：
+    三种类型:
+        execaction：在容器内执行指定命令，如果命令退出时返回码为0则认为成功
+        tcpsocketaction：只指定端口上的容器的IP地址进行TCP检查，
+        httpgetaction: 对指定的端口和路径上的容器的IP地址执行httpget请求；
+
+    
+    探针类型：
+        就绪探针
+        存活探针
+    
+    如何保证k8s里面的服务的高可用？ 通过配置探针。
+
+    微服务启动很快，单体涉及的服务很多启动较慢。
+    intialdelayseconds： 容器启动后多少秒后存活或就绪探针器才被初始化。
+    periodseconds：执行探针的时间间隔。默认10s，最小值1.
+    timeoutseconds：探针的超时后等待多少s。
+    sucessthreshold：； 探测器在失败后，被视为成功的最小连续成功数，默认值是1，
+
+
+    推荐两个探针一起配置。
+    readinessProbe：  livenessProbe:
+    
+
+
+
+========  业务容器化优势 =========
+1.提高资源利用率，节约部署IT成本。 128g 15个虚拟机。  pod--》25个作用 。一个业务8个物理，现在4个物理机。
+2.提高部署效率，基于kubernetes实现快速部署交付、秒级启动。
+3.实现横向扩容、灰度部署、回滚等。
+4.可根据业务负载进行弹性扩展。#根据cpu内存伸缩
+5.容器将环境和代码打包在镜像内，保证了测试与生产环境的一致性。
+
+
+案例1.  镜像分层构建：
+    1.业务镜像设计规划：
+        官方镜像（centos、Ubuntu、Redhat、airplane） ---> 镜像扫描，会因为级别低，出现问题。
+        自定义的基础镜像（centos、Ubuntu、Redhat）
+        自定义的基础镜像（JDK+nginx，tomcat）
+        业务镜像。
+        Harbor镜像服务器。
+
+    
+    2.nginx+tomcat+nfs实现动静分离；
+        user1  - 负载均衡 -> nginx  ----> tomcat --> NFS
+                            ---> NFS 
+    
+
+    3.PV/PVC及zookeeper实战案例
+        PV和不同厂商存储进行对接，有多个不同接口。
+            CSI接口对接。
+        PV  
+        PVC
+        两种类型类似于pod与node。
+
+        创建方式：
+            手动创建：
+            动态创建：先创建storageClass
+        
+            1.管理员预先创建存储类
+            2.用户创建持久化存储类声明
+            3.通知系统使用存储类创建PV
+            4.获取存储类型信息
+            5.基于存储类创建PV
+            6.用户创建使用PVC的Pod
+            7.Pod使用PVC存储数据
+            8.PVC使用PV存储数据。
+
+        PV的accessMode
+            RWO
+            ROX
+            RWX
+        删除及回收策略
+            Retain 
+
+    4.PV/PVC及Redis
+        Redis的存储恢复: 基于内存存储。
+            两种存储的方式：  RDB，AOF；
+                如果两个都在的话：AOF优先级高点。
+
+    5.Mysql主从架构
+        保证里面的目录 是空的。
+        
+    6.Java应用之Jenkins
+        Jenkins.war下载；
+
+            Jenkins的配置信息，需要做持久化。
+            家目录的的隐藏文件。
+
+
+    7.wordpress实例
+        nginx+php
+        
+    注：io比较高的最好部署在虚拟机上。
+
+    HA 可以多进程。
+
+    8.dubbo微服务
+
+        生产者(N) -->  注册中心   <-- 消费者(N)
+
+            微服务管理端--^
+
+
+
+=========== kuberneter网络 ========
+1.网络通信基础
+2.k8s网络flannel及calico
+3.k8spod通信（iptables规则）详解
+4.k8s 网络策略
+5.k8s ingress-NGINX 
+
+1.容器网络
+    容器到容器：
+    pod到pod
+    pod到外部：pod中服务需要访问宿主机网络以外的环境，如硬件存储，运行在虚拟机的数据库，或外网api接口。
+    外部到pod：用于请求从外网经过防火墙及负载均衡，透过nodeport经过service转发给pod请求。
+
+
+    网络的CNI插件的三种实现模式：
+        overlay（叠加模型）：靠隧道打通，不依赖底层网络。
+        路由：靠路由打通，部分依赖底层网络。（依赖路由表）
+        underlay：靠底层网络能力打通，强依赖底层。（性能更好，容器和宿主机使用相同的网段。虚拟化的桥接）好处，不需要iptables的路由的转换。不能跨子网。
+        容器隧道网络，vpc网络，云原生网络2.0
+
+
+1.1网络通信方式：
+    二层通信：（underlay 同一个vlan 子网）
+        基于目标mac地址通信，不可跨局域网通信，通常是由交换机实现报文转发。
+        private mode： 父接口下的子接口之间彼此隔离，不能通信。
+        vepa mode： 子接口之间的通信流程需要导到外部支持802.Qbg功能的交换机，经由外部交换机转发，再绕回来。
+        bridge mode： 每个接口的mac地址是已知的的，不用学习，所以这模式下，子接口就是直接通信的。
+        passthru mode（直通模式）： 只允许单个子接口连接父接口。
+        source mode： 这种模式，只接受mac为指定的mac地址的报文。
+
+    三层通信：
+        基于目标IP通信，也叫做IP交换技术，解决了跨局域网，跨网络通信，通常是路由器，防火墙，三层交换机等。
+    
+        网桥：
+            安装完docker之后会默认生成一个docker的网桥设备，网桥设备通过mac地址转发报文到各个容器，如果容器要访问当前宿主机以外的容器或网络，则
+            会使用宿主机的路由功能进行源地址转换。 brige-utils   brctl show
+            ipv4 ip_forward
+        
+        vlan: 虚拟局域网，
+
+        Overlay网络简介：
+            叠加网络或者覆盖网络，再物理网络的基础之上叠加实现新的虚拟网络，即可使网络的中的容器可以相互通信；
+            （前提要宿主机之间要相互通信）
+                docker0 flannel.1 eth0
+            
+            overlay网络实现方式：  ；两层封装，一个容器的里面的封装，还有一个vlan的隧道的封装。
+            Vxlan：Vxlan虚拟扩展本地局域网，  vxlan是一个vlan的扩展协议，vxlan的特点使将L2的以太帧封装到UDP报文（L2overL4）中，
+            并在L3网络中传输，即使用MAC inUDP的方法对报文进行重新封装，VXlan 本质上是一种overlay的隧道封装技术，它将L2的以太网帧封装成L4的UDp
+            数据报，然后在L3的网络中传输，效果就像l2的以太网帧在一个广播域中传输一样，实际上L2的以太网帧跨域了L3的网络传输，但是却不受L3网络的限制。
+
+                traceroute IP,跟踪路由。
+                打通不同主机之间的通信，
+    
+        underlay： 
+            底层网络，传统IT基础设施网络，由交换机和路由器等组成，借助以太网协议、路由协议和LVAN协议等驱动，它还是
+            Overlay网络的底层网络，为overlay网络提供通信服务。容器网络中的Underlay网络是指借助驱动程序将宿主机的底层网络
+            接口直接暴露给容器使用的一种网络构建技术，较为常见的解决方案有MAC VLAN、IPVLAN 和直接路由等。
+            underlay：依赖于网络网络进行跨主机通信。
+
+
+        区别：
+            overlay需要隧道来封装和解封装跨主机报文，underlay，不需要封装报文，宿主机和容器的都在同一个子网，宿主机的地址不容器修改。
+            overlay修改容器网络比较容器，可以扩主机还可以不同主机。
+            underlay网络策略不好加，网络策略需要在防火墙配置。
+
+
+    VXLAN通信过程：
+        flannel主要运用个vxlan。
+        主机--> VTEP   <====VXLAN隧道====>  VTEP  VNI  主机（服务器）
+                VNI        转发设备          VNI 
+
+    VXLAN的报文格式：
+        ssh|TCP(src port ,dst port) | ipv4 (src IP,dst IP)| ethernet(mac)| VXLAN (VNI 5000)|UDP |IPV4|ethernet
+    
+    1.4 Docker 跨主机通信方案总结：
+        1.4.1
+
+
+    flannel：
+        解决k8s集群中各主机上的Pod相互通信的问题，借助于etcd维护和网络ip地址。
+
+        Flannel组件的解释：
+            CNI0:网桥设备，
+            Flannel.1：overlay；
+
+    netstat -tuanlp | grep  8472 
+    -  表示内核态；
+
+        docker-compose 220左右
+
+        原生的flannel，会过宿主机。
+        flannel 差不多110多；
+        开启VXLAN directrouting：
+        Directrouting 为在同一个二层网络中的node节点启用直接路由机制，类似于host-gw模式。
+        同一个子网就不封装。不支持windows。
+        calico：BGP
+        多副本的pod，可以提高qps。
+
+        1，能使用calico
+            calico支持networkpolicy
+            性能：
+        2.使用启用overlay
+            考虑后期的网络扩展，node是否存在会跨子网的问题；
+        3.不启用overlay
+            flannel host-gw模式。
+            calico BGP 
+        4.overlay 
+            calico的IPIP
+            flannel vxlan
+        
+
+
+    calico：
+        纯三层网络解决方案，为容器提供多node见的访问通信，calico将每一个node节点都当作为一个路由器router，各节点通过
+        BGP边界网关协议学习并在node生成路由规则，从而不同node节点上的pod连接起来进行通信。
+
+        calico两种类型的封装：VXLAN和IPIP(overlay)，区别在于网络协议BGP。
+        支持网络策略规则；
+
+
+    k8s网络之iptables规则：
+        5链，prerouting（RAW，mangle，nat）目标地址转换，
+        INPUT（mangle，nat，filter），forward（mangle，filter）Linux想要支持转发，需要开启forward
+        OUPUT（raw，mangle，nat，filter），postrouting（mangle，nat）SNAT转换；
+
+        请求流程，大致的流出；
+
+
+kuberneter网络之NetworkPolicy
+    
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
